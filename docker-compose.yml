@@ -1,0 +1,50 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto-24831074
+    ports: ["1883:1883"]
+    volumes: ["./mosquitto.conf:/mosquitto/config/mosquitto.conf"]
+
+  edge:
+    build: .
+    container_name: edge-24831074
+    depends_on: [mosquitto]
+    environment:
+      MQTT_HOST: mosquitto
+      TB_HOST: host.docker.internal
+      TB_PORT: "1884"
+      TB_TOKEN: ${TB_TOKEN}
+      BUFFER_FILE: /data/buffer.jsonl
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./edge-data:/data
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: kafka-24831074
+    ports: ["29092:29092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  kafka-bridge:
+    build: .
+    command: python -u kafka_bridge.py
+    container_name: kafka-bridge-24831074
+    depends_on: [kafka, mosquitto]
+    environment:
+      MQTT_HOST: mosquitto
+      KAFKA_BOOTSTRAP: kafka:9092
+    restart: unless-stopped
