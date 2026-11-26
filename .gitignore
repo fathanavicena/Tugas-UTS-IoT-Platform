@@ -1,6 +1,3 @@
-# rahasia, jangan pernah naik ke GitHub
-.env
-
 # data runtime edge (buffer store & forward)
 edge-data/
 
